@@ -2,33 +2,36 @@ use crate::types::Header;
 use arrayvec::ArrayVec;
 use bytes::{Buf, Bytes, BytesMut};
 
-pub trait Decodable: Sized {
-    fn decode(buf: &mut &[u8]) -> Result<Self, DecodeError>;
+pub trait Decodable<'de>: Sized
+where
+    Self: 'de,
+{
+    fn decode(buf: &mut &'de [u8]) -> Result<Self, DecodeError>;
 }
 
 #[cfg(feature = "alloc")]
 mod alloc_impl {
     use super::*;
 
-    impl<T> Decodable for ::alloc::boxed::Box<T>
+    impl<'de, T> Decodable<'de> for ::alloc::boxed::Box<T>
     where
-        T: Decodable + Sized,
+        T: Decodable<'de> + Sized,
     {
-        fn decode(buf: &mut &[u8]) -> Result<Self, DecodeError> {
+        fn decode(buf: &mut &'de [u8]) -> Result<Self, DecodeError> {
             T::decode(buf).map(::alloc::boxed::Box::new)
         }
     }
 
-    impl<T> Decodable for ::alloc::sync::Arc<T>
+    impl<'de, T> Decodable<'de> for ::alloc::sync::Arc<T>
     where
-        T: Decodable + Sized,
+        T: Decodable<'de> + Sized,
     {
-        fn decode(buf: &mut &[u8]) -> Result<Self, DecodeError> {
+        fn decode(buf: &mut &'de [u8]) -> Result<Self, DecodeError> {
             T::decode(buf).map(::alloc::sync::Arc::new)
         }
     }
 
-    impl Decodable for ::alloc::string::String {
+    impl<'de> Decodable<'de> for ::alloc::string::String {
         fn decode(from: &mut &[u8]) -> Result<Self, DecodeError> {
             let h = Header::decode(from)?;
             if h.list {
@@ -186,8 +189,8 @@ fn static_left_pad<const LEN: usize>(data: &[u8]) -> Option<[u8; LEN]> {
 
 macro_rules! decode_integer {
     ($t:ty) => {
-        impl Decodable for $t {
-            fn decode(buf: &mut &[u8]) -> Result<Self, DecodeError> {
+        impl<'de> Decodable<'de> for $t {
+            fn decode(buf: &mut &'de [u8]) -> Result<Self, DecodeError> {
                 let h = Header::decode(buf)?;
                 if h.list {
                     return Err(DecodeError::UnexpectedList);
@@ -215,8 +218,8 @@ decode_integer!(u32);
 decode_integer!(u64);
 decode_integer!(u128);
 
-impl Decodable for bool {
-    fn decode(buf: &mut &[u8]) -> Result<Self, DecodeError> {
+impl<'de> Decodable<'de> for bool {
+    fn decode(buf: &mut &'de [u8]) -> Result<Self, DecodeError> {
         Ok(match u8::decode(buf)? {
             0 => false,
             1 => true,
@@ -235,8 +238,8 @@ mod ethereum_types_support {
 
     macro_rules! fixed_hash_impl {
         ($t:ty) => {
-            impl Decodable for $t {
-                fn decode(buf: &mut &[u8]) -> Result<Self, DecodeError> {
+            impl<'de> Decodable<'de> for $t {
+                fn decode(buf: &mut &'de [u8]) -> Result<Self, DecodeError> {
                     Decodable::decode(buf).map(Self)
                 }
             }
@@ -254,8 +257,8 @@ mod ethereum_types_support {
 
     macro_rules! fixed_uint_impl {
         ($t:ty, $n_bytes:tt) => {
-            impl Decodable for $t {
-                fn decode(buf: &mut &[u8]) -> Result<Self, DecodeError> {
+            impl<'de> Decodable<'de> for $t {
+                fn decode(buf: &mut &'de [u8]) -> Result<Self, DecodeError> {
                     let h = Header::decode(buf)?;
                     if h.list {
                         return Err(DecodeError::UnexpectedList);
@@ -283,7 +286,7 @@ mod ethereum_types_support {
     fixed_uint_impl!(U512, 64);
 }
 
-impl<const N: usize> Decodable for [u8; N] {
+impl<'de, const N: usize> Decodable<'de> for [u8; N] {
     fn decode(from: &mut &[u8]) -> Result<Self, DecodeError> {
         let h = Header::decode(from)?;
         if h.list {
@@ -300,8 +303,24 @@ impl<const N: usize> Decodable for [u8; N] {
         Ok(to)
     }
 }
+impl<'de> Decodable<'de> for &'de [u8] {
+    fn decode(from: &mut &'de [u8]) -> Result<Self, DecodeError> {
+        let h = Header::decode(from)?;
+        if h.list {
+            return Err(DecodeError::UnexpectedList);
+        }
+        if h.payload_length > from.len() {
+            return Err(DecodeError::UnexpectedLength);
+        }
 
-impl Decodable for BytesMut {
+        let slice = &from[..h.payload_length];
+
+        from.advance(h.payload_length);
+        Ok(slice)
+    }
+}
+
+impl<'de> Decodable<'de> for BytesMut {
     fn decode(from: &mut &[u8]) -> Result<Self, DecodeError> {
         let h = Header::decode(from)?;
         if h.list {
@@ -315,8 +334,8 @@ impl Decodable for BytesMut {
     }
 }
 
-impl Decodable for Bytes {
-    fn decode(buf: &mut &[u8]) -> Result<Self, DecodeError> {
+impl<'de> Decodable<'de> for Bytes {
+    fn decode(buf: &mut &'de [u8]) -> Result<Self, DecodeError> {
         BytesMut::decode(buf).map(BytesMut::freeze)
     }
 }
@@ -336,7 +355,7 @@ impl<'a> Rlp<'a> {
         Ok(Self { payload_view })
     }
 
-    pub fn get_next<T: Decodable>(&mut self) -> Result<Option<T>, DecodeError> {
+    pub fn get_next<T: Decodable<'a> + 'a>(&mut self) -> Result<Option<T>, DecodeError> {
         if self.payload_view.is_empty() {
             return Ok(None);
         }
@@ -346,11 +365,11 @@ impl<'a> Rlp<'a> {
 }
 
 #[cfg(feature = "alloc")]
-impl<E> Decodable for alloc::vec::Vec<E>
+impl<'de, E> Decodable<'de> for alloc::vec::Vec<E>
 where
-    E: Decodable,
+    E: Decodable<'de>,
 {
-    fn decode(buf: &mut &[u8]) -> Result<Self, DecodeError> {
+    fn decode(buf: &mut &'de [u8]) -> Result<Self, DecodeError> {
         let h = Header::decode(buf)?;
         if !h.list {
             return Err(DecodeError::UnexpectedString);
@@ -369,11 +388,11 @@ where
     }
 }
 
-impl<E, const LEN: usize> Decodable for ArrayVec<E, LEN>
+impl<'de, E, const LEN: usize> Decodable<'de> for ArrayVec<E, LEN>
 where
-    E: Decodable,
+    E: Decodable<'de>,
 {
-    fn decode(buf: &mut &[u8]) -> Result<Self, DecodeError> {
+    fn decode(buf: &mut &'de [u8]) -> Result<Self, DecodeError> {
         let h = Header::decode(buf)?;
         if !h.list {
             return Err(DecodeError::UnexpectedString);
@@ -404,9 +423,9 @@ mod tests {
     use ethnum::AsU256;
     use hex_literal::hex;
 
-    fn check_decode<T, IT>(fixtures: IT)
+    fn check_decode<'de, T, IT>(fixtures: IT)
     where
-        T: Decodable + PartialEq + Debug,
+        T: Decodable<'de> + PartialEq + Debug,
         IT: IntoIterator<Item = (Result<T, DecodeError>, &'static [u8])>,
     {
         for (expected, mut input) in fixtures {
@@ -417,9 +436,9 @@ mod tests {
         }
     }
 
-    fn check_decode_list<T, IT>(fixtures: IT)
+    fn check_decode_list<'de, T, IT>(fixtures: IT)
     where
-        T: Decodable + PartialEq + Debug,
+        T: Decodable<'de> + PartialEq + Debug,
         IT: IntoIterator<Item = (Result<alloc::vec::Vec<T>, DecodeError>, &'static [u8])>,
     {
         for (expected, mut input) in fixtures {
