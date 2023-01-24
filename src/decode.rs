@@ -46,6 +46,7 @@ mod alloc_impl {
     }
 }
 
+#[cfg_attr(feature = "handle-thiserror", derive(thiserror::Error))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DecodeError {
     Overflow,
@@ -60,7 +61,7 @@ pub enum DecodeError {
     Custom(&'static str),
 }
 
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", not(feature = "handle-thiserror")))]
 impl std::error::Error for DecodeError {}
 
 impl core::fmt::Display for DecodeError {

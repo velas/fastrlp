@@ -11,16 +11,17 @@ arrayvec = { version = "0.7", default-features = false }
 auto_impl = "1"
 bytes = { version = "1", default-features = false }
 ethnum = { version = "1", default-features = false, optional = true }
-ethereum-types = { version = "0.14", default-features = false, optional = true }
+ethereum-types = { version = "0.13", default-features = false, optional = true }
 fastrlp-derive = { version = "0.1", path = "fastrlp-derive", optional = true }
+thiserror = { version = "1", default-features = false, optional = true }
 
 [dev-dependencies]
 fastrlp-test = { path = ".", package = "fastrlp", features = [
     "derive",
     "std",
     "ethnum",
-    "ethbloom",
     "ethereum-types",
+    "handle-thiserror"
 ] }
 criterion = "0.4"
 hex-literal = "0.3"
@@ -29,7 +30,7 @@ hex-literal = "0.3"
 alloc = []
 derive = ["fastrlp-derive"]
 std = ["alloc"]
-ethbloom = ["ethereum-types/ethbloom"]
+handle-thiserror = ["std", "thiserror"]
 
 [[bench]]
 name = "bench"

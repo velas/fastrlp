@@ -9,8 +9,8 @@ pub fn zeroless_view(v: &impl AsRef<[u8]>) -> &[u8] {
     &v[v.iter().take_while(|&&b| b == 0).count()..]
 }
 
-impl Header {
-    pub fn encode(&self, out: &mut dyn BufMut) {
+impl Encodable for Header {
+    fn encode(&self, out: &mut dyn BufMut) {
         if self.payload_length < 56 {
             let code = if self.list {
                 EMPTY_LIST_CODE
@@ -25,6 +25,9 @@ impl Header {
             out.put_u8(code + len_be.len() as u8);
             out.put_slice(len_be);
         }
+    }
+    fn length(&self) -> usize {
+        length_of_length(self.payload_length)
     }
 }
 
