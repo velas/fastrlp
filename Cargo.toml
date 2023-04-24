@@ -24,7 +24,7 @@ fastrlp-test = { path = ".", package = "fastrlp", features = [
     "handle-thiserror"
 ] }
 criterion = "0.4"
-hex-literal = "0.3"
+hex-literal = "0.4"
 
 [features]
 alloc = []

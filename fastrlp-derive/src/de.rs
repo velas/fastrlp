@@ -7,12 +7,12 @@ struct ImplWithDeLifetime<'a>(&'a syn::Generics);
 impl<'a> quote::ToTokens for ImplWithDeLifetime<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         use proc_macro2::Span;
-        use syn::{AttrStyle, Attribute, GenericParam, Lifetime, LifetimeDef};
+        use syn::{AttrStyle, Attribute, GenericParam, Lifetime, LifetimeParam};
         if self.0.params.is_empty() {
             // 'de lifetime
             <syn::Token![<]>::default().to_tokens(tokens);
             // add 'de lifetime param
-            GenericParam::Lifetime(LifetimeDef::new(Lifetime::new("'de", Span::call_site())))
+            GenericParam::Lifetime(LifetimeParam::new(Lifetime::new("'de", Span::call_site())))
                 .to_tokens(tokens);
             <syn::Token![,]>::default().to_tokens(tokens);
             <syn::Token![>]>::default().to_tokens(tokens);
@@ -34,7 +34,7 @@ impl<'a> quote::ToTokens for ImplWithDeLifetime<'a> {
 
         TokensOrDefault(&self.0.lt_token).to_tokens(tokens);
         // add 'de lifetime param
-        GenericParam::Lifetime(LifetimeDef::new(Lifetime::new("'de", Span::call_site())))
+        GenericParam::Lifetime(LifetimeParam::new(Lifetime::new("'de", Span::call_site())))
             .to_tokens(tokens);
         <syn::Token![,]>::default().to_tokens(tokens);
 
