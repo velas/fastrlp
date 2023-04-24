@@ -66,8 +66,7 @@ macro_rules! impl_max_encoded_len {
     };
 }
 
-#[auto_impl(&)]
-#[cfg_attr(feature = "alloc", auto_impl(Box, Arc))]
+#[auto_impl(&, Box, Arc)]
 pub trait Encodable {
     fn encode(&self, out: &mut dyn BufMut);
     fn length(&self) -> usize {
@@ -197,12 +196,14 @@ mod ethnum_support {
     impl_max_encoded_len!(ethnum::U256, { length_of_length(32) + 32 });
 }
 
-
 mod ethereum_types_support {
+    use core::ops::Deref;
+
     use super::*;
+    use ethbloom::Bloom;
+    use ethereum::Log;
     use primitive_types::{H128, H160, H256, H512};
     use primitive_types::{U128, U256, U512};
-    use ethbloom::Bloom;
 
     macro_rules! fixed_hash_impl {
         ($t:ty) => {
@@ -255,6 +256,31 @@ mod ethereum_types_support {
     fixed_uint_impl!(U128, 16);
     fixed_uint_impl!(U256, 32);
     fixed_uint_impl!(U512, 64);
+    impl Encodable for Log {
+        fn encode(&self, out: &mut dyn BufMut) {
+            let slice = self.data.deref();
+            let len = self.address.length() + self.topics.length() + slice.length();
+            Header {
+                list: true,
+                payload_length: len,
+            }
+            .encode(out);
+            self.address.encode(out);
+            self.topics.encode(out);
+            slice.encode(out);
+        }
+
+        fn length(&self) -> usize {
+            let slice = self.data.deref();
+            let len = self.address.length() + self.topics.length() + slice.length();
+            Header {
+                list: true,
+                payload_length: len,
+            }
+            .length()
+                + len
+        }
+    }
 }
 
 macro_rules! slice_impl {
@@ -271,7 +297,6 @@ macro_rules! slice_impl {
     };
 }
 
-#[cfg(feature = "alloc")]
 mod alloc_support {
     use super::*;
 
@@ -493,14 +518,12 @@ mod tests {
     //     ])
     // }
 
-
     fn eth_u128_fixtures() -> impl IntoIterator<Item = (primitive_types::U128, &'static [u8])> {
         c(u128_fixtures()).chain(vec![(
             primitive_types::U128::from_str_radix("10203E405060708090A0B0C0D0E0F2", 16).unwrap(),
             &hex!("8f10203e405060708090a0b0c0d0e0f2")[..],
         )])
     }
-
 
     fn eth_u256_fixtures() -> impl IntoIterator<Item = (primitive_types::U256, &'static [u8])> {
         c(u128_fixtures()).chain(vec![(
@@ -512,7 +535,6 @@ mod tests {
             &hex!("9c0100020003000400050006000700080009000a0b4b000c000d000e01")[..],
         )])
     }
-
 
     fn eth_u512_fixtures() -> impl IntoIterator<Item = (primitive_types::U512, &'static [u8])> {
         c(eth_u256_fixtures()).chain(vec![(
@@ -543,7 +565,6 @@ mod tests {
         #[cfg(feature = "ethnum")]
         uint_rlp_test!(u256_fixtures());
     }
-
 
     #[test]
     fn rlp_eth_uints() {
