@@ -7,12 +7,12 @@ struct ImplWithDeLifetime<'a>(&'a syn::Generics);
 impl<'a> quote::ToTokens for ImplWithDeLifetime<'a> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         use proc_macro2::Span;
-        use syn::{AttrStyle, Attribute, GenericParam, Lifetime, LifetimeDef};
+        use syn::{AttrStyle, Attribute, GenericParam, Lifetime, LifetimeParam};
         if self.0.params.is_empty() {
             // 'de lifetime
             <syn::Token![<]>::default().to_tokens(tokens);
             // add 'de lifetime param
-            GenericParam::Lifetime(LifetimeDef::new(Lifetime::new("'de", Span::call_site())))
+            GenericParam::Lifetime(LifetimeParam::new(Lifetime::new("'de", Span::call_site())))
                 .to_tokens(tokens);
             <syn::Token![,]>::default().to_tokens(tokens);
             <syn::Token![>]>::default().to_tokens(tokens);
@@ -34,7 +34,7 @@ impl<'a> quote::ToTokens for ImplWithDeLifetime<'a> {
 
         TokensOrDefault(&self.0.lt_token).to_tokens(tokens);
         // add 'de lifetime param
-        GenericParam::Lifetime(LifetimeDef::new(Lifetime::new("'de", Span::call_site())))
+        GenericParam::Lifetime(LifetimeParam::new(Lifetime::new("'de", Span::call_site())))
             .to_tokens(tokens);
         <syn::Token![,]>::default().to_tokens(tokens);
 
@@ -101,7 +101,7 @@ pub fn impl_decodable(ast: &syn::DeriveInput) -> TokenStream {
     let body = if let syn::Data::Struct(s) = &ast.data {
         s
     } else {
-        panic!("#[derive(RlpDecodable)] is only defined for structs.");
+        panic!("#[derive(Decodable)] is only defined for structs.");
     };
 
     let stmts: Vec<_> = body
@@ -158,13 +158,13 @@ pub fn impl_decodable_wrapper(ast: &syn::DeriveInput) -> TokenStream {
     let body = if let syn::Data::Struct(s) = &ast.data {
         s
     } else {
-        panic!("#[derive(RlpEncodableWrapper)] is only defined for structs.");
+        panic!("#[derive(EncodableWrapper)] is only defined for structs.");
     };
 
     assert_eq!(
         body.fields.iter().count(),
         1,
-        "#[derive(RlpEncodableWrapper)] is only defined for structs with one field."
+        "#[derive(EncodableWrapper)] is only defined for structs with one field."
     );
 
     let name = &ast.ident;

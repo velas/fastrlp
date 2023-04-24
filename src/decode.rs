@@ -253,7 +253,6 @@ mod ethereum_types_support {
     fixed_hash_impl!(H256);
     fixed_hash_impl!(H512);
     fixed_hash_impl!(H520);
-    #[cfg(feature = "ethbloom")]
     fixed_hash_impl!(Bloom);
 
     macro_rules! fixed_uint_impl {

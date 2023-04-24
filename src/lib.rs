@@ -19,5 +19,5 @@ pub use types::*;
 
 #[cfg(feature = "derive")]
 pub use fastrlp_derive::{
-    RlpDecodable, RlpDecodableWrapper, RlpEncodable, RlpEncodableWrapper, RlpMaxEncodedLen,
+    Decodable, DecodableWrapper, Encodable, EncodableWrapper, MaxEncodedLen,
 };

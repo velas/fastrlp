@@ -6,7 +6,7 @@ pub fn impl_encodable(ast: &syn::DeriveInput) -> TokenStream {
     let body = if let syn::Data::Struct(s) = &ast.data {
         s
     } else {
-        panic!("#[derive(RlpEncodable)] is only defined for structs.");
+        panic!("#[derive(Encodable)] is only defined for structs.");
     };
 
     let length_stmts: Vec<_> = body
@@ -44,7 +44,7 @@ pub fn impl_encodable(ast: &syn::DeriveInput) -> TokenStream {
                 return fastrlp::length_of_length(rlp_head.payload_length) + rlp_head.payload_length;
             }
             fn encode(&self, out: &mut dyn fastrlp::BufMut) {
-                E::rlp_header(self).encode(out);
+                fastrlp::Header::encode(&E::rlp_header(self), out);
                 #(#stmts)*
             }
         }
@@ -62,7 +62,7 @@ pub fn impl_encodable_wrapper(ast: &syn::DeriveInput) -> TokenStream {
     let body = if let syn::Data::Struct(s) = &ast.data {
         s
     } else {
-        panic!("#[derive(RlpEncodableWrapper)] is only defined for structs.");
+        panic!("#[derive(EncodableWrapper)] is only defined for structs.");
     };
 
     let ident = {
@@ -71,7 +71,7 @@ pub fn impl_encodable_wrapper(ast: &syn::DeriveInput) -> TokenStream {
             let field = fields.first().expect("fields.len() == 1; qed");
             field_ident(0, field)
         } else {
-            panic!("#[derive(RlpEncodableWrapper)] is only defined for structs with one field.")
+            panic!("#[derive(EncodableWrapper)] is only defined for structs with one field.")
         }
     };
 
@@ -84,7 +84,7 @@ pub fn impl_encodable_wrapper(ast: &syn::DeriveInput) -> TokenStream {
                 self.#ident.length()
             }
             fn encode(&self, out: &mut dyn fastrlp::BufMut) {
-                self.#ident.encode(out)
+                fastrlp::Encodable::encode(&self.#ident, out)
             }
         }
     };
@@ -101,7 +101,7 @@ pub fn impl_max_encoded_len(ast: &syn::DeriveInput) -> TokenStream {
     let body = if let syn::Data::Struct(s) = &ast.data {
         s
     } else {
-        panic!("#[derive(RlpEncodable)] is only defined for structs.");
+        panic!("#[derive(Encodable)] is only defined for structs.");
     };
 
     let stmts: Vec<_> = body
