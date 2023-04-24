@@ -313,7 +313,7 @@ mod ethereum_types_support {
             let cnt = count(buf)?;
             if cnt != 3 {
                 return Err(DecodeError::ListLengthMismatch {
-                    expected: 4,
+                    expected: 3,
                     got: cnt,
                 });
             }
