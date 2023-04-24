@@ -9,7 +9,6 @@ where
     fn decode(buf: &mut &'de [u8]) -> Result<Self, DecodeError>;
 }
 
-#[cfg(feature = "alloc")]
 mod alloc_impl {
     use super::*;
 
@@ -61,7 +60,7 @@ pub enum DecodeError {
     Custom(&'static str),
 }
 
-#[cfg(all(feature = "std", not(feature = "handle-thiserror")))]
+#[cfg(not(feature = "handle-thiserror"))]
 impl std::error::Error for DecodeError {}
 
 impl core::fmt::Display for DecodeError {
@@ -231,11 +230,32 @@ impl<'de> Decodable<'de> for bool {
 
 #[cfg(feature = "ethnum")]
 decode_integer!(ethnum::U256);
+pub fn count(mut buf: &[u8]) -> Result<usize, DecodeError> {
+    let buf = &mut buf;
+    let mut count: usize = 0;
+    loop {
+        if buf.is_empty() {
+            break;
+        }
+        let Ok(h) = Header::decode(buf) else {
+            return Err(DecodeError::Custom("header expected"));
+        };
+        if h.payload_length > buf.len() {
+            return Err(DecodeError::InputTooShort);
+        }
+        buf.advance(h.payload_length);
+        count += 1;
+    }
+    // are empty lists sick? (is empty list a valid case in rlp?)
+    Ok(count)
+}
 
-#[cfg(feature = "ethereum-types")]
 mod ethereum_types_support {
     use super::*;
-    use ethereum_types::*;
+    use ethbloom::Bloom;
+    use ethereum::Log;
+    use primitive_types::{H128, H160, H256, H512};
+    use primitive_types::{U128, U256, U512};
 
     macro_rules! fixed_hash_impl {
         ($t:ty) => {
@@ -247,12 +267,12 @@ mod ethereum_types_support {
         };
     }
 
-    fixed_hash_impl!(H64);
+    // fixed_hash_impl!(H64);
     fixed_hash_impl!(H128);
     fixed_hash_impl!(H160);
     fixed_hash_impl!(H256);
     fixed_hash_impl!(H512);
-    fixed_hash_impl!(H520);
+    // fixed_hash_impl!(H520);
     fixed_hash_impl!(Bloom);
 
     macro_rules! fixed_uint_impl {
@@ -280,10 +300,34 @@ mod ethereum_types_support {
         };
     }
 
-    fixed_uint_impl!(U64, 8);
+    // fixed_uint_impl!(U64, 8);
     fixed_uint_impl!(U128, 16);
     fixed_uint_impl!(U256, 32);
     fixed_uint_impl!(U512, 64);
+    impl<'de> Decodable<'de> for Log {
+        fn decode(buf: &mut &'de [u8]) -> Result<Self, DecodeError> {
+            let h = Header::decode(buf)?;
+            if !h.list {
+                return Err(DecodeError::UnexpectedString);
+            }
+            let cnt = count(buf)?;
+            if cnt != 3 {
+                return Err(DecodeError::ListLengthMismatch {
+                    expected: 4,
+                    got: cnt,
+                });
+            }
+
+            let address = Decodable::decode(buf)?;
+            let topics = Decodable::decode(buf)?;
+            let data: &[u8] = Decodable::decode(buf)?;
+            Ok(Self {
+                address,
+                topics,
+                data: data.to_vec(),
+            })
+        }
+    }
 }
 
 impl<'de, const N: usize> Decodable<'de> for [u8; N] {
@@ -364,7 +408,6 @@ impl<'a> Rlp<'a> {
     }
 }
 
-#[cfg(feature = "alloc")]
 impl<'de, E> Decodable<'de> for alloc::vec::Vec<E>
 where
     E: Decodable<'de>,
@@ -419,9 +462,9 @@ mod tests {
     use super::*;
     use alloc::vec;
     use core::fmt::Debug;
-    use ethereum_types::{U128, U256, U512, U64};
     use ethnum::AsU256;
     use hex_literal::hex;
+    use primitive_types::{U128, U256, U512};
 
     fn check_decode<'de, T, IT>(fixtures: IT)
     where
@@ -533,35 +576,33 @@ mod tests {
         ])
     }
 
-    #[cfg(feature = "ethereum-types")]
-    #[test]
-    fn rlp_ethereum_types_u64() {
-        check_decode(vec![
-            (Ok(U64::from(9_u8)), &hex!("09")[..]),
-            (Ok(U64::from(0_u8)), &hex!("80")[..]),
-            (Ok(U64::from(0x0505_u16)), &hex!("820505")[..]),
-            (Ok(U64::from(0xCE05050505_u64)), &hex!("85CE05050505")[..]),
-            (
-                Err(DecodeError::Overflow),
-                &hex!("8AFFFFFFFFFFFFFFFFFF7C")[..],
-            ),
-            (
-                Err(DecodeError::InputTooShort),
-                &hex!("8BFFFFFFFFFFFFFFFFFF7C")[..],
-            ),
-            (Err(DecodeError::UnexpectedList), &hex!("C0")[..]),
-            (Err(DecodeError::LeadingZero), &hex!("00")[..]),
-            (Err(DecodeError::NonCanonicalSingleByte), &hex!("8105")[..]),
-            (Err(DecodeError::LeadingZero), &hex!("8200F4")[..]),
-            (Err(DecodeError::NonCanonicalSize), &hex!("B8020004")[..]),
-            (
-                Err(DecodeError::Overflow),
-                &hex!("A101000000000000000000000000000000000000008B000000000000000000000000")[..],
-            ),
-        ])
-    }
+    // #[test]
+    // fn rlp_ethereum_types_u64() {
+    //     check_decode(vec![
+    //         (Ok(U64::from(9_u8)), &hex!("09")[..]),
+    //         (Ok(U64::from(0_u8)), &hex!("80")[..]),
+    //         (Ok(U64::from(0x0505_u16)), &hex!("820505")[..]),
+    //         (Ok(U64::from(0xCE05050505_u64)), &hex!("85CE05050505")[..]),
+    //         (
+    //             Err(DecodeError::Overflow),
+    //             &hex!("8AFFFFFFFFFFFFFFFFFF7C")[..],
+    //         ),
+    //         (
+    //             Err(DecodeError::InputTooShort),
+    //             &hex!("8BFFFFFFFFFFFFFFFFFF7C")[..],
+    //         ),
+    //         (Err(DecodeError::UnexpectedList), &hex!("C0")[..]),
+    //         (Err(DecodeError::LeadingZero), &hex!("00")[..]),
+    //         (Err(DecodeError::NonCanonicalSingleByte), &hex!("8105")[..]),
+    //         (Err(DecodeError::LeadingZero), &hex!("8200F4")[..]),
+    //         (Err(DecodeError::NonCanonicalSize), &hex!("B8020004")[..]),
+    //         (
+    //             Err(DecodeError::Overflow),
+    //             &hex!("A101000000000000000000000000000000000000008B000000000000000000000000")[..],
+    //         ),
+    //     ])
+    // }
 
-    #[cfg(feature = "ethereum-types")]
     #[test]
     fn rlp_ethereum_types_u128() {
         check_decode(vec![
@@ -589,7 +630,6 @@ mod tests {
         ])
     }
 
-    #[cfg(feature = "ethereum-types")]
     #[test]
     fn rlp_ethereum_types_u256() {
         check_decode(vec![
@@ -617,7 +657,6 @@ mod tests {
         ])
     }
 
-    #[cfg(feature = "ethereum-types")]
     #[test]
     fn rlp_ethereum_types_u512() {
         check_decode(vec![
