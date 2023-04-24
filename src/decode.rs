@@ -310,7 +310,9 @@ mod ethereum_types_support {
             if !h.list {
                 return Err(DecodeError::UnexpectedString);
             }
-            let cnt = count(buf)?;
+            let payload_view = &mut &buf[..h.payload_length];
+
+            let cnt = count(*payload_view)?;
             if cnt != 3 {
                 return Err(DecodeError::ListLengthMismatch {
                     expected: 3,
@@ -318,9 +320,10 @@ mod ethereum_types_support {
                 });
             }
 
-            let address = Decodable::decode(buf)?;
-            let topics = Decodable::decode(buf)?;
-            let data: &[u8] = Decodable::decode(buf)?;
+            let address = Decodable::decode(payload_view)?;
+            let topics = Decodable::decode(payload_view)?;
+            let data: &[u8] = Decodable::decode(payload_view)?;
+            buf.advance(h.payload_length);
             Ok(Self {
                 address,
                 topics,
